@@ -1,0 +1,55 @@
+Vagrant.require_version ">= 2.0.0"
+
+VM_IMG = "ubuntu/focal64"
+VM_NAME = "kubearmor-k3s"
+
+system("
+    if [ #{ARGV[0]} = 'up' ]; then
+      if [ ! -f ~/.ssh/id_rsa ]; then
+        echo '~/.ssh/id_rsa keys does not exist.'
+        ssh-keygen -t rsa -f ~/.ssh/id_rsa
+      fi
+    fi
+")
+
+$installk3s = <<-SCRIPT
+#curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC='--flannel-backend=none' sh -s - --write-kubeconfig-mode 644
+curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644
+echo "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml" >> ~/.bashrc
+
+vm_ip=`ip addr show enp0s8 2>/dev/null | grep "inet " | awk '{print $2}'`
+if [ "$vm_ip" == "" ]; then
+	echo "could not get private addr of VM($vm_ip)"
+	exit 1
+fi
+vm_ip=`echo $vm_ip | cut -f 1 -d '/'`
+echo "VM IP is $vm_ip"
+sed "s/127\.0\.0\.1/$vm_ip/g" /etc/rancher/k3s/k3s.yaml > /home/vagrant/kubeconfig
+SCRIPT
+
+Vagrant.configure("2") do |config|
+  # vagrant@VM_NAME
+  config.vm.hostname = VM_NAME
+
+  config.vagrant.plugins = ["vagrant-scp"]
+
+  config.vm.define VM_NAME do |cfg|
+    cfg.vm.box = VM_IMG
+    cfg.vm.provider "virtualbox" do |vb|
+      vb.name = VM_NAME
+      vb.memory = 4096
+      vb.cpus = 2
+      vb.customize ['modifyvm', :id, '--nested-hw-virt', 'on']
+    end
+  end
+
+  # copy ssh keys
+  config.vm.provision "file", source: "~/.ssh/id_rsa.pub", destination: "/home/vagrant/.ssh/id_rsa.pub"
+  config.vm.provision :shell, :inline => "cat /home/vagrant/.ssh/id_rsa.pub >> /home/vagrant/.ssh/authorized_keys", run: "always"
+
+  # private network
+  config.vm.network "private_network", type: "dhcp"
+
+  # provision bash scripts
+  config.vm.provision :shell, inline: $installk3s
+end
