@@ -22,6 +22,17 @@ curl -O https://raw.githubusercontent.com/kubearmor/kastore/main/vagrant/Vagrant
 
 Execute `vagrant up` in the same folder where `Vagrantfile` is located.
 
+
+>If you are using windows machine as host add the following lines at the top  `Vagrantfile` before executing `vagrant up` 
+
+class VagrantPlugins::ProviderVirtualBox::Action::Network
+  def dhcp_server_matches_config?(dhcp_server, config)
+    true
+  end
+end
+
+
+
 <details>
   <summary>Console Output</summary>
 
