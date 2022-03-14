@@ -86,8 +86,7 @@ jobs:
           echo Checking status...
           kubectl get pods -A
 
-          echo Sleeping for 300 seconds...
-          sleep 300
+          sleep 120
 
           echo Get Auto discovered policies...
           curl -s https://raw.githubusercontent.com/accuknox/tools/main/get_discovered_yamls.sh | bash
