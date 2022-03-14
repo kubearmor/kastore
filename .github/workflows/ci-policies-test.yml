@@ -33,7 +33,8 @@ jobs:
           curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC='--flannel-backend=none --disable traefik' sh -s - --write-kubeconfig-mode 644
 
           echo Make k3s cluster config default...
-          export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+          mkdir ~/.kube
+          cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
 
           echo Install helm...
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
