@@ -13,7 +13,7 @@ on:
 
   # Schedule cronjob every 1 hour
   schedule:
-    - cron: '*/60 * * * *'
+    - cron: '*/120 * * * *'
 
 jobs:
   # This workflow contains a single job called "build"
@@ -26,30 +26,20 @@ jobs:
 
       - name: Setting up k8s cluster and generating policies
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
-
           echo Install k3s cluster...
           curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC='--flannel-backend=none --disable traefik' sh -s - --write-kubeconfig-mode 644
+          sleep 30
 
           echo Make k3s cluster config default...
           mkdir ~/.kube
           cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
 
-          echo Install helm...
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-
-          echo Install karmor...
           curl -sfL https://raw.githubusercontent.com/kubearmor/kubearmor-client/main/install.sh | sudo sh -s -- -b /usr/local/bin
 
           echo Install cilium cli tool...
           curl -L --remote-name-all https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz{,.sha256sum}
-          echo Checking for cilium tar file...
-          sha256sum --check cilium-linux-amd64.tar.gz.sha256sum
-          echo Extracting the tar file...
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
-          echo Removing the tar file...
-          rm cilium-linux-amd64.tar.gz{,.sha256sum}
 
           echo Install Daemonsets and Services...
           curl -s https://raw.githubusercontent.com/accuknox/tools/main/install.sh | bash
@@ -59,12 +49,6 @@ jobs:
 
           echo Waiting for kubearmor to be ready...
           kubectl wait --for=condition=ready pod -l kubearmor-app=kubearmor --timeout=60s --namespace kube-system
-
-          echo Waiting for kubearmor-policy-manager to be ready...
-          kubectl wait --for=condition=ready pod -l kubearmor-app=kubearmor-policy-manager --timeout=60s --namespace kube-system
-
-          echo Waiting for kubearmor-host-policy-manager to be ready...
-          kubectl wait --for=condition=ready pod -l kubearmor-app=kubearmor-host-policy-manager --timeout=60s --namespace kube-system
 
           echo Waiting for knoxautopolicy to be ready...
           kubectl wait --for=condition=ready pod -l container=knoxautopolicy --timeout=60s --namespace explorer
@@ -81,25 +65,29 @@ jobs:
           echo Waiting for wordpress to be ready...
           kubectl wait --for=condition=ready pod -l app=wordpress --timeout=60s --namespace wordpress-mysql
 
-          echo Waiting for mysql to be ready...
+          echo Waiting for wordpress-mysql to be ready...
           kubectl wait --for=condition=ready pod -l app=mysql --timeout=60s --namespace wordpress-mysql
 
           echo Checking status...
           kubectl get pods -A
 
-          sleep 120
+          echo sleeping...
+          sleep 5
+          kubectl exec -n explorer $(kubectl get pods -n explorer -l container=knoxautopolicy -o custom-columns=:metadata.name) -- ls /
+          sleep 5
+          kubectl exec -n explorer $(kubectl get pods -n explorer -l container=knoxautopolicy -o custom-columns=:metadata.name) -- find /home
+          sleep 5
+          kubectl exec -n explorer $(kubectl get pods -n explorer -l container=knoxautopolicy -o custom-columns=:metadata.name) -- find /home
+          sleep 20
 
+          echo After sleep...
+          kubectl get pods -A
           echo Get Auto discovered policies...
           curl -s https://raw.githubusercontent.com/accuknox/tools/main/get_discovered_yamls.sh | bash
-
-          echo Listing all policies....
-          ls -d kubearmor_policies_default*
 
       - name: List Kubearmor policies
         run: |
             ls -d kubearmor_policies_default*
-            echo pwd
-            pwd
 
       - name: Display kubearmor_policies_default_explorer_knoxautopolicy
         run: |
@@ -120,3 +108,25 @@ jobs:
       - name: Display cilium policies
         run: |
             cat cilium_policies.yaml
+
+      - name: Get Artifacts
+        if: ${{ always() }}
+        run: |
+          kubectl get pods,svc -A -o wide > /tmp/k8s-status.txt
+          kubectl describe pod -n explorer $(kubectl get pods -n explorer -l container=knoxautopolicy -o custom-columns=:metadata.name) > /tmp/discovery-describe-pod.txt
+          kubectl exec -it -n kube-system $(kubectl get pods -n kube-system -l kubearmor-app=kubearmor -o custom-columns=:metadata.name) -- cat /tmp/kubearmor.log > /tmp/kubearmor.log
+          kubectl logs -n explorer $(kubectl get pods -n explorer -l container=knoxautopolicy -o custom-columns=:metadata.name) > /tmp/discoveryengine.log
+          kubectl exec -it -n explorer $(kubectl get pods -n explorer -l container=knoxautopolicy -o custom-columns=:metadata.name) -- /observe_clear_sys_data.sh --req observe > /tmp/observe.json
+
+      - name: Archive log artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: IntegrationTestsArtifacts
+          path: |
+            /tmp/k8s-status.txt
+            /tmp/kubearmor.log
+            /tmp/observe.json
+            /tmp/discoveryengine.log
+            /tmp/discovery-describe-pod.txt
+
