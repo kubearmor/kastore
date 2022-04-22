@@ -116,7 +116,6 @@ jobs:
           kubectl describe pod -n explorer $(kubectl get pods -n explorer -l container=knoxautopolicy -o custom-columns=:metadata.name) > /tmp/discovery-describe-pod.txt
           kubectl exec -it -n kube-system $(kubectl get pods -n kube-system -l kubearmor-app=kubearmor -o custom-columns=:metadata.name) -- cat /tmp/kubearmor.log > /tmp/kubearmor.log
           kubectl logs -n explorer $(kubectl get pods -n explorer -l container=knoxautopolicy -o custom-columns=:metadata.name) > /tmp/discoveryengine.log
-          kubectl exec -it -n explorer $(kubectl get pods -n explorer -l container=knoxautopolicy -o custom-columns=:metadata.name) -- /observe_clear_sys_data.sh --req observe > /tmp/observe.json
 
       - name: Archive log artifacts
         if: ${{ failure() }}
